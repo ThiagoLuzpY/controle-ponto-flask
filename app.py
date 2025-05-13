@@ -14,6 +14,7 @@ OPENCAGE_API_KEY = "c9aac9c2ac4b468fbd700c9dc1489763"
 
 def criar_tabela():
     con = sqlite3.connect(DB_PATH)
+    con.execute("PRAGMA foreign_keys = ON")
     cur = con.cursor()
     cur.execute('''
         CREATE TABLE IF NOT EXISTS pontos (
@@ -29,9 +30,12 @@ def criar_tabela():
     con.commit()
     con.close()
 
+
 def criar_tabela_funcionarios():
     con = sqlite3.connect(DB_PATH)
+    con.execute("PRAGMA foreign_keys = ON")
     cur = con.cursor()
+
     cur.execute('''
         CREATE TABLE IF NOT EXISTS funcionarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,19 +46,38 @@ def criar_tabela_funcionarios():
             senha_hash TEXT NOT NULL
         )
     ''')
+
     cur.execute('''
         CREATE TABLE IF NOT EXISTS log_reset_senha (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            funcionario_id INTEGER NOT NULL,
+            funcionario_id INTEGER,
+            nome_funcionario TEXT,
             data_hora TEXT NOT NULL,
             latitude REAL,
             longitude REAL,
             endereco TEXT,
-            FOREIGN KEY (funcionario_id) REFERENCES funcionarios(id)
+            FOREIGN KEY (funcionario_id) REFERENCES funcionarios(id) ON DELETE SET NULL
         )
     ''')
+
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS log_exclusao_funcionarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT,
+            sobrenome TEXT,
+            telefone TEXT,
+            data_nascimento TEXT,
+            latitude REAL,
+            longitude REAL,
+            endereco TEXT,
+            data_hora TEXT
+        )
+    ''')
+
     con.commit()
     con.close()
+
+
 
 def obter_endereco(latitude, longitude):
     try:
@@ -75,6 +98,7 @@ def index():
     latitude = longitude = endereco = None
 
     con = sqlite3.connect(DB_PATH)
+    con.execute("PRAGMA foreign_keys = ON")
     cur = con.cursor()
     cur.execute("SELECT nome, sobrenome FROM funcionarios ORDER BY nome ASC")
     funcionarios = [f"{n} {s}" for n, s in cur.fetchall()]
@@ -94,6 +118,7 @@ def index():
             nome, sobrenome = nome_completo, ""
 
         con = sqlite3.connect(DB_PATH)
+        con.execute("PRAGMA foreign_keys = ON")
         cur = con.cursor()
         cur.execute("SELECT senha_hash FROM funcionarios WHERE nome = ? AND sobrenome = ?", (nome, sobrenome))
         row = cur.fetchone()
@@ -119,6 +144,7 @@ def index():
 @app.route("/registros")
 def registros():
     con = sqlite3.connect(DB_PATH)
+    con.execute("PRAGMA foreign_keys = ON")
     cur = con.cursor()
     cur.execute("""
         SELECT nome, tipo, data_hora, latitude, longitude, endereco
@@ -130,6 +156,7 @@ def registros():
 
 def carregar_dados_para_grafico():
     con = sqlite3.connect(DB_PATH)
+    con.execute("PRAGMA foreign_keys = ON")
     df = pd.read_sql_query("SELECT * FROM pontos", con)
     con.close()
     df['data_hora'] = pd.to_datetime(df['data_hora'])
@@ -191,6 +218,7 @@ def graficos():
     caminho_html = grafico_interativo_plotly(df)
 
     con = sqlite3.connect(DB_PATH)
+    con.execute("PRAGMA foreign_keys = ON")
     cur = con.cursor()
     cur.execute("SELECT nome, sobrenome FROM funcionarios ORDER BY nome ASC")
     funcionarios = [f"{n} {s}" for n, s in cur.fetchall()]  # ✅ Aqui a concatenação correta
@@ -217,6 +245,7 @@ def cadastro():
         else:
             senha_hash = generate_password_hash(senha)
             con = sqlite3.connect(DB_PATH)
+            con.execute("PRAGMA foreign_keys = ON")
             cur = con.cursor()
             cur.execute("""
                 INSERT INTO funcionarios (nome, sobrenome, telefone, data_nascimento, senha_hash)
@@ -232,6 +261,7 @@ def cadastro():
 def reset_senha():
     mensagem = None
     con = sqlite3.connect(DB_PATH)
+    con.execute("PRAGMA foreign_keys = ON")
     cur = con.cursor()
     cur.execute("SELECT nome, sobrenome FROM funcionarios ORDER BY nome ASC")
     funcionarios = [f"{n} {s}" for n, s in cur.fetchall()]  # ✅ Concatenação correta
@@ -256,6 +286,7 @@ def reset_senha():
                 nome, sobrenome = nome_completo, ""
 
             con = sqlite3.connect(DB_PATH)
+            con.execute("PRAGMA foreign_keys = ON")
             cur = con.cursor()
             cur.execute("""
                 SELECT id FROM funcionarios
@@ -269,9 +300,9 @@ def reset_senha():
                 senha_hash = generate_password_hash(nova_senha)
                 cur.execute("UPDATE funcionarios SET senha_hash = ? WHERE id = ?", (senha_hash, funcionario_id))
                 cur.execute("""
-                    INSERT INTO log_reset_senha (funcionario_id, data_hora, latitude, longitude, endereco)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (funcionario_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), latitude, longitude, endereco))
+                    INSERT INTO log_reset_senha (funcionario_id, nome_funcionario, data_hora, latitude, longitude, endereco)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (funcionario_id, nome_completo, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), latitude, longitude, endereco))
                 con.commit()
                 mensagem = "✅ Senha redefinida com sucesso!"
             else:
@@ -283,6 +314,7 @@ def reset_senha():
 @app.route("/funcionarios", methods=["GET"])
 def funcionarios():
     con = sqlite3.connect(DB_PATH)
+    con.execute("PRAGMA foreign_keys = ON")
     cur = con.cursor()
     cur.execute("SELECT id, nome, sobrenome, telefone, data_nascimento FROM funcionarios ORDER BY nome ASC")
     funcionarios = cur.fetchall()
@@ -293,18 +325,42 @@ def funcionarios():
 @app.route("/excluir_funcionario", methods=["POST"])
 def excluir_funcionario():
     funcionario_id = request.form.get("funcionario_id")
+    latitude = request.form.get("latitude", "")
+    longitude = request.form.get("longitude", "")
+    endereco = obter_endereco(latitude, longitude)
+
     if funcionario_id:
         con = sqlite3.connect(DB_PATH)
+        con.execute("PRAGMA foreign_keys = ON")
         cur = con.cursor()
-        cur.execute("DELETE FROM funcionarios WHERE id = ?", (funcionario_id,))
+
+        # 🔍 Busca os dados do funcionário antes de excluir
+        cur.execute("SELECT nome, sobrenome FROM funcionarios WHERE id = ?", (funcionario_id,))
+        row = cur.fetchone()
+
+        if row:
+            nome, sobrenome = row
+            data_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # 📝 Registra no log de exclusão
+            cur.execute("""
+                INSERT INTO log_exclusao_funcionarios (nome, sobrenome, data_hora, latitude, longitude, endereco)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (nome, sobrenome, data_hora, latitude, longitude, endereco))
+
+            # ❌ Exclui da tabela original
+            cur.execute("DELETE FROM funcionarios WHERE id = ?", (funcionario_id,))
+
         con.commit()
         con.close()
+
     return redirect("/funcionarios")
 
 
 @app.route("/exportar_funcionarios")
 def exportar_funcionarios():
     con = sqlite3.connect(DB_PATH)
+    con.execute("PRAGMA foreign_keys = ON")
     cur = con.cursor()
     cur.execute("SELECT nome, sobrenome, telefone, data_nascimento FROM funcionarios")
     dados = cur.fetchall()
@@ -348,6 +404,7 @@ def exportar_grafico_csv():
 @app.route("/exportar_registros_csv")
 def exportar_registros_csv():
     con = sqlite3.connect(DB_PATH)
+    con.execute("PRAGMA foreign_keys = ON")
     df = pd.read_sql_query("SELECT nome, tipo, data_hora, latitude, longitude, endereco FROM pontos ORDER BY data_hora DESC", con)
     con.close()
 
@@ -355,6 +412,34 @@ def exportar_registros_csv():
     df.to_csv(output, index=False)
     output.seek(0)
     return send_file(io.BytesIO(output.read().encode('utf-8')), mimetype="text/csv", as_attachment=True, download_name="registros.csv")
+
+
+@app.route("/logs")
+def logs():
+    con = sqlite3.connect(DB_PATH)
+    con.execute("PRAGMA foreign_keys = ON")
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+
+    # ✅ Log de redefinição de senha (já com nome completo)
+    cur.execute("""
+        SELECT nome_funcionario, data_hora, latitude, longitude, endereco
+        FROM log_reset_senha
+        ORDER BY data_hora DESC
+    """)
+    reset_logs = cur.fetchall()
+
+    # ✅ Log de exclusão (dados armazenados diretamente)
+    cur.execute("""
+        SELECT nome, sobrenome, telefone, data_nascimento, data_hora, latitude, longitude, endereco
+        FROM log_exclusao_funcionarios
+        ORDER BY data_hora DESC
+    """)
+    exclusao_logs = cur.fetchall()
+
+    con.close()
+    return render_template("logs.html", reset_logs=reset_logs, exclusao_logs=exclusao_logs)
+
 
 if __name__ == "__main__":
     criar_tabela()
