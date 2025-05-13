@@ -1,3 +1,6 @@
+![Controle de Ponto Banner](./banner.png)
+
+
 # 📍 Controle de Ponto Flask
 
 Sistema de controle de ponto com geolocalização, autenticação de funcionários, gráficos interativos e exportações em CSV.
