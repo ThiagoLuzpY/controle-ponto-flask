@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>📊 Gráficos de Marcações</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f6f7f9;
+            padding-top: 80px;
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #1a237e;
+        }
+        .filtros-form {
+            max-width: 1000px;
+            margin: 0 auto 30px auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.05);
+        }
+        .grafico-box {
+            max-width: 1000px;
+            margin: 0 auto;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            background: white;
+            padding: 15px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.05);
+        }
+        .export-btn {
+            display: block;
+            max-width: 1000px;
+            margin: 0 auto 20px auto;
+            text-align: right;
+        }
+        .link-voltar {
+            display: block;
+            text-align: center;
+            margin-top: 30px;
+            font-weight: bold;
+            text-decoration: none;
+            color: #1a237e;
+        }
+        .link-voltar:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/">📍 Controle de Ponto</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="/">Registrar Ponto</a></li>
+                <li class="nav-item"><a class="nav-link" href="/registros">Ver Registros</a></li>
+                <li class="nav-item"><a class="nav-link active" href="/graficos">Ver Gráficos</a></li>
+                <li class="nav-item"><a class="nav-link" href="/funcionarios">Funcionários</a></li>
+                <li class="nav-item"><a class="nav-link" href="/cadastro">Cadastrar Funcionário</a></li>
+                <li class="nav-item"><a class="nav-link" href="/reset_senha">Resetar Senha</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<!-- Título -->
+<h2>📊 Gráfico Interativo de Marcações por Colaborador</h2>
+
+<!-- Filtros -->
+<form method="GET" class="filtros-form">
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label for="nome">Filtrar por Nome:</label>
+            <select class="form-select" name="nome" id="nome">
+                <option value="">Todos</option>
+                {% for nome_completo in funcionarios %}
+                    <option value="{{ nome_completo }}">{{ nome_completo }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label for="tipo">Tipo de Marcação:</label>
+            <select class="form-select" name="tipo" id="tipo">
+                <option value="">Todos os tipos</option>
+                <option value="Entrada">Entrada</option>
+                <option value="Pausa">Pausa</option>
+                <option value="Retorno">Retorno</option>
+                <option value="Saída">Saída</option>
+            </select>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label for="data_inicio">Data Inicial:</label>
+            <input type="date" class="form-control" name="data_inicio" id="data_inicio">
+        </div>
+        <div class="col-md-6 mb-3">
+            <label for="data_fim">Data Final:</label>
+            <input type="date" class="form-control" name="data_fim" id="data_fim">
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search"></i> Aplicar Filtros</button>
+</form>
+
+<!-- Exportar CSV -->
+<div class="export-btn">
+    <a href="/exportar_grafico_csv" class="btn btn-success">
+        <i class="bi bi-download"></i> Exportar CSV
+    </a>
+</div>
+
+<!-- Gráfico -->
+{% if html_grafico %}
+    <div class="grafico-box">
+        <iframe src="{{ html_grafico }}" width="100%" height="500" frameborder="0"></iframe>
+    </div>
+{% else %}
+    <p style="text-align:center;">Nenhum dado disponível para gerar o gráfico.</p>
+{% endif %}
+
+<a class="link-voltar" href="/">⬅ Voltar para o Início</a>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
