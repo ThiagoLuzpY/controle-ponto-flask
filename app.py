@@ -334,19 +334,20 @@ def excluir_funcionario():
         con.execute("PRAGMA foreign_keys = ON")
         cur = con.cursor()
 
-        # 🔍 Busca os dados do funcionário antes de excluir
-        cur.execute("SELECT nome, sobrenome FROM funcionarios WHERE id = ?", (funcionario_id,))
+        # 🔍 Busca os dados completos antes de excluir
+        cur.execute("SELECT nome, sobrenome, telefone, data_nascimento FROM funcionarios WHERE id = ?", (funcionario_id,))
         row = cur.fetchone()
 
         if row:
-            nome, sobrenome = row
+            nome, sobrenome, telefone, data_nascimento = row
             data_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            # 📝 Registra no log de exclusão
+            # 📝 Registro completo no log
             cur.execute("""
-                INSERT INTO log_exclusao_funcionarios (nome, sobrenome, data_hora, latitude, longitude, endereco)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (nome, sobrenome, data_hora, latitude, longitude, endereco))
+                INSERT INTO log_exclusao_funcionarios 
+                (nome, sobrenome, telefone, data_nascimento, data_hora, latitude, longitude, endereco)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (nome, sobrenome, telefone, data_nascimento, data_hora, latitude, longitude, endereco))
 
             # ❌ Exclui da tabela original
             cur.execute("DELETE FROM funcionarios WHERE id = ?", (funcionario_id,))
