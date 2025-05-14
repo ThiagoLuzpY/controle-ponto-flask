@@ -1,18 +1,14 @@
-# 🐍 Arquivos e pastas do Python
+# Executáveis e builds
+*.exe
+*.spec
+dist/
+build/
+
+# Ambientes virtuais
+.venv/
+venv/
+
+# Cache e lixo
 __pycache__/
 *.pyc
-*.log
-*.env
-*.db
-*.sqlite3
-
-# 🧪 Ambientes virtuais
-venv/
-instance/
-
-# 🧰 IDEs e editores
-.vscode/
-.idea/
-
-# 🍎 Sistema macOS
-.D
+.DS_Store
