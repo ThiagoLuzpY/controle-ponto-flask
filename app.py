@@ -7,8 +7,12 @@ import plotly.express as px
 from werkzeug.security import generate_password_hash, check_password_hash
 import csv
 import io
+from werkzeug.security import generate_password_hash, check_password_hash
+
+
 
 app = Flask(__name__)
+app.secret_key = "segredo_super_secreto_123"
 DB_PATH = "loja.db"
 OPENCAGE_API_KEY = "c9aac9c2ac4b468fbd700c9dc1489763"
 
@@ -78,6 +82,31 @@ def criar_tabela_funcionarios():
     con.close()
 
 
+def criar_tabela_admin():
+    con = sqlite3.connect(DB_PATH)
+    cur = con.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS config_admin (
+            id INTEGER PRIMARY KEY,
+            nome TEXT NOT NULL,
+            senha_hash TEXT NOT NULL
+        )
+    """)
+
+    # Verifica se já existe um admin cadastrado
+    cur.execute("SELECT COUNT(*) FROM config_admin")
+    if cur.fetchone()[0] == 0:
+        # Define senha padrão 'MC1234' (com hash)
+        senha_default = "MC1234"
+        hash_senha = generate_password_hash(senha_default)
+        cur.execute("INSERT INTO config_admin (id, nome, senha_hash) VALUES (1, 'admin', ?)", (hash_senha,))
+        print("✅ Admin padrão criado com senha: MC1234")
+
+    con.commit()
+    con.close()
+
+
 
 def obter_endereco(latitude, longitude):
     try:
@@ -93,7 +122,15 @@ def obter_endereco(latitude, longitude):
 
 # Atualiza a rota index() no app.py para validar com nome completo
 @app.route("/", methods=["GET", "POST"])
-def index():
+def selecao_perfil():
+    return render_template("selecao_perfil.html")
+
+
+@app.route("/registrar", methods=["GET", "POST"])
+def registrar_ponto():
+    if session.get("perfil") != "funcionario":
+        return redirect("/")
+
     mensagem = None
     latitude = longitude = endereco = None
 
@@ -143,6 +180,8 @@ def index():
 
 @app.route("/registros")
 def registros():
+    if session.get("perfil") != "admin":
+        return redirect("/")
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA foreign_keys = ON")
     cur = con.cursor()
@@ -195,6 +234,8 @@ import pandas as pd
 
 @app.route("/graficos")
 def graficos():
+    if session.get("perfil") != "admin":
+        return redirect("/")
     df = carregar_dados_para_grafico()
     df["nome"] = df["nome"].astype(str)
 
@@ -231,6 +272,8 @@ def graficos():
 
 @app.route("/cadastro", methods=["GET", "POST"])
 def cadastro():
+    if session.get("perfil") != "admin":
+        return redirect("/")
     mensagem = None
 
     if request.method == "POST":
@@ -262,60 +305,59 @@ def cadastro():
 
 @app.route("/reset_senha", methods=["GET", "POST"])
 def reset_senha():
+    if session.get("perfil") not in ["admin", "funcionario"]:
+        return redirect("/")
+
     mensagem = None
+    nome = session.get("nome_funcionario") if session["perfil"] == "funcionario" else None
+
     con = sqlite3.connect(DB_PATH)
-    con.execute("PRAGMA foreign_keys = ON")
     cur = con.cursor()
-    cur.execute("SELECT nome, sobrenome FROM funcionarios ORDER BY nome ASC")
-    funcionarios = [f"{n} {s}" for n, s in cur.fetchall()]  # ✅ Concatenação correta
-    con.close()
+
+    # ADMIN vê todos os nomes
+    if session["perfil"] == "admin":
+        cur.execute("SELECT nome, sobrenome FROM funcionarios ORDER BY nome ASC")
+        funcionarios = [f"{n} {s}" for n, s in cur.fetchall()]
+    else:
+        funcionarios = [nome]
 
     if request.method == "POST":
-        nome_completo = request.form.get("nome", "").strip()
+        nome_selecionado = request.form.get("nome")
         data_nascimento = request.form.get("data_nascimento", "").strip()
-        nova_senha = request.form.get("nova_senha", "")
-        confirmar_senha = request.form.get("confirmar_senha", "")
-        latitude = request.form.get("latitude", "")
-        longitude = request.form.get("longitude", "")
+        nova_senha = request.form.get("nova_senha")
+        confirmar = request.form.get("confirmar_senha")
 
-        if not all([nome_completo, data_nascimento, nova_senha, confirmar_senha]):
-            mensagem = "⚠️ Todos os campos são obrigatórios."
-        elif nova_senha != confirmar_senha:
+        if nova_senha != confirmar:
             mensagem = "❌ As senhas não coincidem."
+        elif len(nova_senha) < 4:
+            mensagem = "❌ A nova senha deve ter pelo menos 4 caracteres."
         else:
-            if nome_completo and " " in nome_completo:
-                nome, sobrenome = nome_completo.split(" ", 1)
-            else:
-                nome, sobrenome = nome_completo, ""
+            nome_partes = nome_selecionado.split(" ", 1)
+            nome, sobrenome = nome_partes if len(nome_partes) > 1 else (nome_partes[0], "")
 
-            con = sqlite3.connect(DB_PATH)
-            con.execute("PRAGMA foreign_keys = ON")
-            cur = con.cursor()
-            cur.execute("""
-                SELECT id FROM funcionarios
-                WHERE nome = ? AND sobrenome = ? AND data_nascimento = ?
-            """, (nome, sobrenome, data_nascimento))
+            cur.execute("SELECT data_nascimento FROM funcionarios WHERE nome = ? AND sobrenome = ?", (nome, sobrenome))
             row = cur.fetchone()
 
-            if row:
-                funcionario_id = row[0]
-                endereco = obter_endereco(latitude, longitude)
-                senha_hash = generate_password_hash(nova_senha)
-                cur.execute("UPDATE funcionarios SET senha_hash = ? WHERE id = ?", (senha_hash, funcionario_id))
-                cur.execute("""
-                    INSERT INTO log_reset_senha (funcionario_id, nome_funcionario, data_hora, latitude, longitude, endereco)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (funcionario_id, nome_completo, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), latitude, longitude, endereco))
-                con.commit()
-                mensagem = "✅ Senha redefinida com sucesso!"
-            else:
-                mensagem = "❌ Dados inválidos. Verifique o nome, sobrenome e a data de nascimento."
-            con.close()
+            if session["perfil"] == "funcionario":
+                if not row or row[0] != data_nascimento:
+                    mensagem = "❌ Data de nascimento incorreta."
+                    con.close()
+                    return render_template("reset_senha.html", funcionarios=funcionarios, mensagem=mensagem)
 
-    return render_template("reset_senha.html", mensagem=mensagem, funcionarios=funcionarios)
+            hash_nova = generate_password_hash(nova_senha)
+            cur.execute("UPDATE funcionarios SET senha_hash = ? WHERE nome = ? AND sobrenome = ?", (hash_nova, nome, sobrenome))
+            con.commit()
+            mensagem = "✅ Senha redefinida com sucesso."
+            con.close()
+            return render_template("reset_senha.html", funcionarios=funcionarios, mensagem=mensagem)
+
+    con.close()
+    return render_template("reset_senha.html", funcionarios=funcionarios, mensagem=mensagem)
 
 @app.route("/funcionarios", methods=["GET"])
 def funcionarios():
+    if session.get("perfil") != "admin":
+        return redirect("/")
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA foreign_keys = ON")
     cur = con.cursor()
@@ -327,6 +369,8 @@ def funcionarios():
 # Nova rota: exclusão de funcionário por ID
 @app.route("/excluir_funcionario", methods=["POST"])
 def excluir_funcionario():
+    if session.get("perfil") != "admin":
+        return redirect("/")
     funcionario_id = request.form.get("funcionario_id")
     latitude = request.form.get("latitude", "")
     longitude = request.form.get("longitude", "")
@@ -363,6 +407,8 @@ def excluir_funcionario():
 
 @app.route("/exportar_funcionarios")
 def exportar_funcionarios():
+    if session.get("perfil") != "admin":
+        return redirect("/")
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA foreign_keys = ON")
     cur = con.cursor()
@@ -379,6 +425,8 @@ def exportar_funcionarios():
 
 @app.route("/exportar_grafico_csv")
 def exportar_grafico_csv():
+    if session.get("perfil") != "admin":
+        return redirect("/")
     df = carregar_dados_para_grafico()
     nome_filtro = request.args.get("nome", "").strip()
     tipo_filtro = request.args.get("tipo", "").strip()
@@ -407,6 +455,8 @@ def exportar_grafico_csv():
 
 @app.route("/exportar_registros_csv")
 def exportar_registros_csv():
+    if session.get("perfil") != "admin":
+        return redirect("/")
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA foreign_keys = ON")
     df = pd.read_sql_query("SELECT nome, tipo, data_hora, latitude, longitude, endereco FROM pontos ORDER BY data_hora DESC", con)
@@ -418,8 +468,117 @@ def exportar_registros_csv():
     return send_file(io.BytesIO(output.read().encode('utf-8')), mimetype="text/csv", as_attachment=True, download_name="registros.csv")
 
 
+from flask import session, redirect, url_for, render_template, request, flash
+
+@app.route("/login_admin", methods=["GET", "POST"])
+def login_admin():
+    if request.method == "POST":
+        senha = request.form.get("senha", "").strip()
+
+        con = sqlite3.connect(DB_PATH)
+        cur = con.cursor()
+        cur.execute("SELECT senha_hash FROM config_admin WHERE id = 1")
+        row = cur.fetchone()
+        con.close()
+
+        senha_valida = False
+
+        if row:
+            senha_hash = row[0]
+            senha_valida = check_password_hash(senha_hash, senha)
+
+        # Caso senha válida OU senha padrão 'MC1234'
+        if senha_valida or senha == "MC1234":
+            session["perfil"] = "admin"
+            flash("Login de administrador realizado com sucesso.", "success")
+            return redirect("/funcionarios")  # Página inicial para admins
+        else:
+            flash("Senha incorreta. Tente novamente.", "danger")
+            return render_template("login_admin.html")
+
+    return render_template("login_admin.html")
+
+
+@app.route("/login_funcionario", methods=["GET", "POST"])
+def login_funcionario():
+    mensagem = None
+    funcionarios = []
+
+    con = sqlite3.connect(DB_PATH)
+    cur = con.cursor()
+    cur.execute("SELECT nome, sobrenome FROM funcionarios ORDER BY nome ASC")
+    funcionarios = [f"{n} {s}" for n, s in cur.fetchall()]
+    con.close()
+
+    if request.method == "POST":
+        nome_completo = request.form.get("nome", "").strip()
+        senha = request.form.get("senha", "").strip()
+
+        if nome_completo and " " in nome_completo:
+            nome, sobrenome = nome_completo.split(" ", 1)
+        else:
+            nome, sobrenome = nome_completo, ""
+
+        con = sqlite3.connect(DB_PATH)
+        cur = con.cursor()
+        cur.execute("SELECT senha_hash FROM funcionarios WHERE nome = ? AND sobrenome = ?", (nome, sobrenome))
+        row = cur.fetchone()
+        con.close()
+
+        if row and check_password_hash(row[0], senha):
+            session["perfil"] = "funcionario"
+            session["nome_funcionario"] = nome_completo
+            return redirect("/registrar")
+        else:
+            mensagem = "❌ Nome ou senha inválidos."
+
+    return render_template("login_funcionario.html", mensagem=mensagem, funcionarios=funcionarios)
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/")
+
+
+@app.route("/config_admin", methods=["GET", "POST"])
+def config_admin():
+    if session.get("perfil") != "admin":
+        return redirect("/")
+
+    mensagem = None
+
+    if request.method == "POST":
+        senha_atual = request.form.get("senha_atual", "").strip()
+        nova_senha = request.form.get("nova_senha", "").strip()
+        confirmar = request.form.get("confirmar_senha", "").strip()
+
+        con = sqlite3.connect(DB_PATH)
+        cur = con.cursor()
+        cur.execute("SELECT senha_hash FROM config_admin WHERE id = 1")
+        row = cur.fetchone()
+
+        senha_hash = row[0] if row else ""
+        senha_correta = check_password_hash(senha_hash, senha_atual) or senha_atual == "MC1234"
+
+        if not senha_correta:
+            mensagem = "❌ Senha atual incorreta."
+        elif nova_senha != confirmar:
+            mensagem = "❌ A nova senha e a confirmação não coincidem."
+        elif len(nova_senha) < 4:
+            mensagem = "❌ A nova senha deve ter pelo menos 4 caracteres."
+        else:
+            novo_hash = generate_password_hash(nova_senha)
+            cur.execute("UPDATE config_admin SET senha_hash = ? WHERE id = 1", (novo_hash,))
+            con.commit()
+            mensagem = "✅ Senha alterada com sucesso."
+        con.close()
+
+    return render_template("config_admin.html", mensagem=mensagem)
+
 @app.route("/logs")
 def logs():
+    if session.get("perfil") != "admin":
+        return redirect("/")
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA foreign_keys = ON")
     con.row_factory = sqlite3.Row
@@ -456,6 +615,7 @@ if __name__ == "__main__":
 
     criar_tabela()
     criar_tabela_funcionarios()
+    criar_tabela_admin()  # ✅ Adicionado
 
     if not is_running_from_reloader():
         Timer(1, abrir_navegador).start()

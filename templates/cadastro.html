@@ -33,12 +33,20 @@
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ms-auto">
-                <li class="nav-item"><a class="nav-link" href="/">Registrar Ponto</a></li>
-                <li class="nav-item"><a class="nav-link" href="/registros">Ver Registros</a></li>
-                <li class="nav-item"><a class="nav-link" href="/graficos">Ver Gráficos</a></li>
-                <li class="nav-item"><a class="nav-link" href="/funcionarios">Funcionários</a></li>
-                <li class="nav-item"><a class="nav-link active" href="/cadastro">Cadastrar Funcionário</a></li>
-                <li class="nav-item"><a class="nav-link" href="/reset_senha">Resetar Senha</a></li>
+                {% if session["perfil"] == "admin" %}
+                    <li class="nav-item"><a class="nav-link {% if request.path == '/funcionarios' %}active{% endif %}" href="/funcionarios">Funcionários</a></li>
+                    <li class="nav-item"><a class="nav-link {% if request.path == '/cadastro' %}active{% endif %}" href="/cadastro">Cadastrar Funcionário</a></li>
+                    <li class="nav-item"><a class="nav-link {% if request.path == '/logs' %}active{% endif %}" href="/logs">Logs</a></li>
+                    <li class="nav-item"><a class="nav-link {% if request.path == '/graficos' %}active{% endif %}" href="/graficos">Ver Gráficos</a></li>
+                    <li class="nav-item"><a class="nav-link {% if request.path == '/reset_senha' %}active{% endif %}" href="/reset_senha">Resetar Senha</a></li>
+                    <li class="nav-item"><a class="nav-link {% if request.path == '/config_admin' %}active{% endif %}" href="/config_admin">Configurações</a></li>
+                {% elif session["perfil"] == "funcionario" %}
+                    <li class="nav-item"><a class="nav-link {% if request.path == '/registrar' %}active{% endif %}" href="/registrar">Registrar Ponto</a></li>
+                    <li class="nav-item"><a class="nav-link {% if request.path == '/reset_senha' %}active{% endif %}" href="/reset_senha">Resetar Senha</a></li>
+                {% endif %}
+                {% if session["perfil"] %}
+                    <li class="nav-item"><a class="nav-link text-danger fw-bold" href="/logout">🚪 Sair</a></li>
+                {% endif %}
             </ul>
         </div>
     </div>

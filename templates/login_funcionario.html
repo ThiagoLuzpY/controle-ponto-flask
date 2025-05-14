@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>👤 Login Funcionário</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f0f2f5;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-box {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h4 class="text-center">👤 Login Funcionário</h4>
+        <form method="POST">
+            <div class="mb-3">
+                <label for="nome" class="form-label">Nome:</label>
+                <select name="nome" id="nome" class="form-select" required>
+                    <option value="">Selecione o funcionário</option>
+                    {% for nome in funcionarios %}
+                        <option value="{{ nome }}">{{ nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="senha" class="form-label">Senha:</label>
+                <input type="password" name="senha" id="senha" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Entrar</button>
+        </form>
+        <a href="/" class="d-block text-center mt-3">⬅ Voltar</a>
+
+        {% if mensagem %}
+            <div class="alert alert-danger mt-3">{{ mensagem }}</div>
+        {% endif %}
+    </div>
+</body>
+</html>
