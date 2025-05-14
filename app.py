@@ -163,10 +163,11 @@ def carregar_dados_para_grafico():
     df['data'] = df['data_hora'].dt.date
     return df
 
-def grafico_interativo_plotly(df):
+
+def grafico_interativo_plotly(df) -> str:
     if df.empty:
         print("⚠️ DataFrame vazio — sem dados para gerar gráfico.")
-        return None
+        return "<p>Nenhum dado disponível para gerar gráfico.</p>"
 
     fig = px.histogram(
         df,
@@ -185,11 +186,13 @@ def grafico_interativo_plotly(df):
         font=dict(size=14)
     )
 
-    caminho_html = "static/grafico_interativo.html"
-    fig.write_html(caminho_html, full_html=False)
-    return caminho_html
+    # ➕ Retorna o HTML como string (sem salvar arquivo)
+    return fig.to_html(include_plotlyjs='cdn', full_html=False)
 
 # Atualiza rotas que renderizam selects: graficos, reset_senha
+from flask import render_template
+import pandas as pd
+
 @app.route("/graficos")
 def graficos():
     df = carregar_dados_para_grafico()
@@ -215,16 +218,16 @@ def graficos():
         except:
             pass
 
-    caminho_html = grafico_interativo_plotly(df)
+    html_grafico = grafico_interativo_plotly(df)
 
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA foreign_keys = ON")
     cur = con.cursor()
     cur.execute("SELECT nome, sobrenome FROM funcionarios ORDER BY nome ASC")
-    funcionarios = [f"{n} {s}" for n, s in cur.fetchall()]  # ✅ Aqui a concatenação correta
+    funcionarios = [f"{n} {s}" for n, s in cur.fetchall()]
     con.close()
 
-    return render_template("graficos.html", html_grafico=caminho_html, funcionarios=funcionarios)
+    return render_template("graficos.html", html_grafico=html_grafico, funcionarios=funcionarios)
 
 @app.route("/cadastro", methods=["GET", "POST"])
 def cadastro():
@@ -441,8 +444,20 @@ def logs():
     con.close()
     return render_template("logs.html", reset_logs=reset_logs, exclusao_logs=exclusao_logs)
 
+import webbrowser
+from threading import Timer
+
+def abrir_navegador():
+    webbrowser.open_new("http://127.0.0.1:5000")
+
 
 if __name__ == "__main__":
+    from werkzeug.serving import is_running_from_reloader
+
     criar_tabela()
     criar_tabela_funcionarios()
+
+    if not is_running_from_reloader():
+        Timer(1, abrir_navegador).start()
+
     app.run(debug=True)

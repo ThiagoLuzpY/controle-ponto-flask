@@ -1,12 +1,18 @@
-```gitignore
+# 🐍 Arquivos e pastas do Python
 __pycache__/
 *.pyc
+*.log
+*.env
 *.db
 *.sqlite3
-.env
-.vscode/
-.idea/
+
+# 🧪 Ambientes virtuais
 venv/
 instance/
-.DS_Store
-*.log
+
+# 🧰 IDEs e editores
+.vscode/
+.idea/
+
+# 🍎 Sistema macOS
+.D
